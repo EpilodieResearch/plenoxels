@@ -212,6 +212,7 @@ def get_data(root, stage):
 
     for frame in tqdm(j['frames']):
         fpath = os.path.join(data_path, os.path.basename(frame['file_path']) + '.png')
+        # Okay dokay, we probably don't need the c2w here, weirdly enough, though I know I'm sure (I think, maybe, not sure), that's something that's normally optimized.
         c2w = frame['transform_matrix']
         im_gt = imageio.imread(fpath).astype(np.float32) / 255.0
         im_gt = im_gt[..., :3] * im_gt[..., 3:] + (1.0 - im_gt[..., 3:])
@@ -280,11 +281,18 @@ def multi_lowpass(gt, resolution):
     return clean_gt
 
 
+# I.... think this should be all we really need here! Other than that, everything else is just setup. :D
 def get_loss(data_dict, c2w, gt, H, W, focal, resolution, radius, harmonic_degree, jitter, uniform, key, sh_dim, occupancy_penalty, interpolation, nv):
+    # Okay dokay here! C2W is probably something we won't directly learn, but instead just pass in in a fixed way (need to figure out appropriate bounds,
+    # but for now -- just probably need to pick a singular viewpoint and work from that.
     rays = plenoxel.get_rays(H, W, focal, c2w)
+    # This probably can stay unchanged too! (just as long as c2w is a set of constants, I think/methinks!)
     rgb, disp, acc, weights, voxel_ids = plenoxel.render_rays(data_dict, rays, resolution, key, radius, harmonic_degree, jitter, uniform, interpolation, nv)
     mse = jnp.mean((rgb - lowpass(gt, resolution))**2)
     indices, data = data_dict
+    # Ah, interesting, this one has the lowpass, while the other doesn't.
+    # But which loss is appropriate here? I feel like actually directly updating it is the best, so l1 maybe our best bet tbh.
+    # TODO: is batch.... ohhh, got it, right, don't think we can do that one here... :'(
     loss = mse + occupancy_penalty * jnp.mean(jax.nn.relu(data[-1]))
     return loss
 
