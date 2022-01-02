@@ -16,7 +16,7 @@ def get_freer_gpu():
 
 gpu = get_freer_gpu()
 os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
-print(f'gpu is {gpu}')
+#print(f'gpu is {gpu}')
 
 # Import jax only after setting the visible gpu
 import jax
