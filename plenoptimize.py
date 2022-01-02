@@ -292,9 +292,10 @@ def get_loss(data_dict, c2w, gt, H, W, focal, resolution, radius, harmonic_degre
     rays = plenoxel.get_rays(H, W, focal, c2w)
     print("Rays shape! : ", (rays[0].shape, rays[1].shape))
     # Okay, this shape is not good as we need to reshape the hw shape into the full vertical shape. Here we go! :D
+    # This is not a very good way to really do this, but it should help!
     rays = (
-        rays[0][...,:],
-        rays[1][...,:],
+        jnp.reshape(rays[0], (-1,rays[0].shape[-1])),
+        jnp.reshape(rays[1], (-1,rays[1].shape[-1])),
            )
     print("Rays shape! : ", (rays[0].shape, rays[1].shape))
     # This probably can stay unchanged too! (just as long as c2w is a set of constants, I think/methinks!)
