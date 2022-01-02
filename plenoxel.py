@@ -202,6 +202,7 @@ def scalar_to_data_index(idx, indices):
 
 # Map an index in a grid to a set of 8 child indices in the split grid
 def expand_index(idx, new_resolution):
+  # Breaks down crying intensely at the keyboard upon reading this.
   i000 = scalarize(idx[0]*2, idx[1]*2, idx[2]*2, new_resolution)
   i001 = scalarize(idx[0]*2, idx[1]*2, idx[2]*2 + 1, new_resolution)
   i010 = scalarize(idx[0]*2, idx[1]*2 + 1, idx[2]*2, new_resolution)
@@ -262,6 +263,7 @@ def get_neighbors(idx, resolution):
   bottom = scalarize(volid[0], jnp.maximum(0, volid[1] - 1), volid[2], resolution)
   right = scalarize(volid[0], volid[1], jnp.minimum(resolution-1, volid[2] + 1), resolution)
   left = scalarize(volid[0], volid[1], jnp.maximum(0, volid[2] - 1), resolution)
+  # This new array op has got to be freaking expensive (as well as the constant reshaping w/o using views+strides of the original arrays....
   return jnp.array([idx, front, back, top, bottom, right, left])
 
 
@@ -317,6 +319,7 @@ def load_grid(dirname, sh_dim):
 @jax.jit
 def trilinear_interpolation_weight(xyzs):
   # xyzs should have shape [n_pts, 3] and denote the offset (as a fraction of voxel_len) from the 000 interpolation point
+  # :'( Let's just use shifting instead, mkay? (if that, we might be able to calculate it on the fly pretty easily....
   xs = xyzs[:,0]
   ys = xyzs[:,1]
   zs = xyzs[:,2]
@@ -342,6 +345,9 @@ def tricubic_interpolation(xyzs, corner_pts, grid, matrix, powers):
   # corner_pts should have shape [n_pts, 3] and denote the grid coordinates of the 000 interpolation point
   # matrix should be [64, 64] output of tricubic_interpolation_matrix
   # powers should be [64, 3] and contain all combinations of the powers 0 through 3 in three dimensions
+  # Oh no.....
+  # I think we could avoid all of this with a good cup of tea/coffee, and a very nice np slice/jax/gather operation. There's no need at all
+  # for all of this....... :'( Plus, why else have A100s if you can't do sparse magic? (Only somewhat sarcastic, hee hee!)
   neighbor_data = jax.vmap(lambda pts: tricubic_neighbors(pts, grid))(corner_pts)  # list where each entry has shape [n_pts, 64, ...] 
   coeffs = [jnp.clip(jax.vmap(lambda d: jnp.matmul(matrix, d))(d), a_min=-1e7, a_max=1e7) for d in neighbor_data]  # list where each entry has shape [n_pts, 64, ...]
   things_to_multiply_by_coeffs = jnp.clip(jax.vmap(lambda power: apply_power(power, xyzs), out_axes=-1)(powers), a_min=-1e7, a_max=1e7)  # [n_pts, 64]
@@ -372,6 +378,8 @@ def tricubic_neighbors(idx, grid):
 def tricubic_interpolation_matrix():
   # Set up the indices
   powers = []
+  # Oh dearie me, this should be in jax righto awayo, el pronto... o./oh. Maybe this is just upfront cost? hopefully?
+  # But it looks like its trying to do that in the loop each time.....
   for i in range(4):
     for j in range(4):
       for k in range(4):
@@ -458,6 +466,7 @@ def render_rays(grid, rays, resolution, keys, radius=1.3, harmonic_degree=0, jit
   voxel_len = radius * 2.0 / resolution
   assert (resolution // 2) * 2 == resolution # Renderer assumes resolution is a multiple of 2
   rays_o, rays_d = rays
+  # TODO: just use "with jax.lax.stop_gradient" here to make things wayyyyy more simple
   # Compute when the rays enter and leave the grid
   offsets_pos = jax.lax.stop_gradient((radius - rays_o) / rays_d)
   offsets_neg = jax.lax.stop_gradient((-radius - rays_o) / rays_d)
@@ -475,12 +484,20 @@ def render_rays(grid, rays, resolution, keys, radius=1.3, harmonic_degree=0, jit
   matrix = None
   powers = None
   if interpolation == 'tricubic':
+    # Feels kinda fishy, (also, hecka aspensive) may need to look into this more....
+    # Seems like a lot of this flattening/unflattening could be done with using dynamic indexing and all of that not-fun-to-write-at-all-for-most-reasonable-people kinda business :'/
+    # YEP, this is BIGBOI aspensive unless we're memoizing to save the outputs after that first time or something. We memoizing? I need to check if'n jax does that here.
+    # Okay, alright, it's probably just easier to call these outside of everything just in case there's weird ambiguity due to numpy being outside of the jax...
+    #     jax-xy scope, or whatever that is.
     matrix, powers = tricubic_interpolation_matrix()
+  # Rays'O Shape: It's great for your bones, and your fitness and fit form and figure today! Try some at our latest convenience marts, "Day's'O'Marty'Mc'Fly'E'Shapety'Wapety'Bin'Marty-'Poo-'Mc-'aBic'McBic'AMartegolaciouswoo-marteiPooMart"
+  # TODO: Figure this out. Looks like this (rightly) calculates where the rays intersect voxels.
   if len(rays_o.shape) > 2:
     voxel_sh, voxel_sigma, intersections = get_intersections({"start": start, "stop": stop, "offset": offset, "interval": interval, "ray_o": rays_o, "ray_d": rays_d}, grid, resolution, radius, jitter, uniform, keys, sh_dim, interpolation, matrix, powers)
   else:
     voxel_sh, voxel_sigma, intersections = get_intersections_partial({"start": start, "stop": stop, "offset": offset, "interval": interval, "ray_o": rays_o, "ray_d": rays_d}, grid, resolution, radius, jitter, uniform, keys, sh_dim, interpolation, matrix, powers)
   # Apply spherical harmonics
+  # Here is where the custom kernels could/should come into play!
   voxel_rgb = sh.eval_sh(harmonic_degree, voxel_sh, rays_d)
   # Call volumetric_rendering
   if nv:
@@ -493,10 +510,16 @@ def render_rays(grid, rays, resolution, keys, radius=1.3, harmonic_degree=0, jit
 
 
 def get_rays(H, W, focal, c2w):
-    i, j = jnp.meshgrid(jnp.linspace(0, W-1, W) + 0.5, jnp.linspace(0, H-1, H) + 0.5) 
+    """
+    Given a height and width scalar (focal and c2w still tbd), this function returns rays (rays_o and rays_d, tbd what they are) for later use
+    in loss functions, family recipes, cookbook booking and cooking cookery bookery shows, and so on, etc, etc.
+    """
+    # The linspace+mesgrid here desperately needs an mgrid call of d = .5 mgrid([W:W+d:1,H:H+d:1]) i think (or arange even)
+    i, j = jnp.meshgrid(jnp.linspace(0, W-1, W) + 0.5, jnp.linspace(0, H-1, H) + 0.5)
+    # I'm assuming these are the directions, but i will not pretend to remotely understand what this/they mean.
     dirs = jnp.stack([(i-W*.5)/focal, -(j-H*.5)/focal, -jnp.ones_like(i)], -1)
     # Rotate ray directions from camera frame to the world frame
     rays_d = jnp.sum(dirs[..., jnp.newaxis, :] * c2w[:3,:3], -1)  # dot product, equals to: [c2w.dot(dir) for dir in dirs]
-    # Translate camera frame's origin to the world frame. It is the origin of all rays.
+    # Translate camera frame's origin to the world frame. It is the origin of all rays. It is our light and our true hope.
     rays_o = jnp.broadcast_to(c2w[:3,-1], rays_d.shape)
     return rays_o, rays_d
