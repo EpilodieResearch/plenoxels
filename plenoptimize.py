@@ -196,7 +196,8 @@ flags.add_argument(
     help='Use the Neural Volumes rendering formula instead of the Max (NeRF) rendering formula.'
 )
 
-FLAGS = flags.parse_args()
+# Cause jupyter notebooks get weird and this file for some reason forces the argparse to import functions from it since it's not __main__ guarded :'(
+FLAGS, unknown = flags.parse_known_args()
 data_dir = FLAGS.data_dir + FLAGS.scene
 radius = FLAGS.radius
 
