@@ -468,18 +468,19 @@ def render_rays(grid, rays, resolution, keys, radius=1.3, harmonic_degree=0, jit
   rays_o, rays_d = rays
   # TODO: just use "with jax.lax.stop_gradient" here to make things wayyyyy more simple
   # Compute when the rays enter and leave the grid
-  offsets_pos = jax.lax.stop_gradient((radius - rays_o) / rays_d)
-  offsets_neg = jax.lax.stop_gradient((-radius - rays_o) / rays_d)
-  offsets_in = jax.lax.stop_gradient(jnp.minimum(offsets_pos, offsets_neg))
-  offsets_out = jax.lax.stop_gradient(jnp.maximum(offsets_pos, offsets_neg))
-  start = jax.lax.stop_gradient(jnp.max(offsets_in, axis=-1, keepdims=True))
-  stop = jax.lax.stop_gradient(jnp.min(offsets_out, axis=-1, keepdims=True))
-  first_intersection = jax.lax.stop_gradient(rays_o + start * rays_d)
-  # Compute locations of ray-voxel intersections along each dimension
-  interval = jax.lax.stop_gradient(voxel_len / jnp.abs(rays_d))
-  offset_bigger = jax.lax.stop_gradient((safe_ceil(first_intersection / voxel_len) * voxel_len - first_intersection) / rays_d)
-  offset_smaller = jax.lax.stop_gradient((safe_floor(first_intersection / voxel_len) * voxel_len - first_intersection) / rays_d)
-  offset = jax.lax.stop_gradient(jnp.maximum(offset_bigger, offset_smaller))
+  with jax.lax.stop_gradient:
+      offsets_pos = (radius - rays_o) / rays_d
+      offsets_neg = (-radius - rays_o) / rays_d
+      offsets_in = jnp.minimum(offsets_pos, offsets_neg)
+      offsets_out = jnp.maximum(offsets_pos, offsets_neg)
+      start = jnp.max(offsets_in, axis=-1, keepdims=True)
+      stop = jnp.min(offsets_out, axis=-1, keepdims=True)
+      first_intersection = rays_o + start * rays_d
+      # Compute locations of ray-voxel intersections along each dimension
+      interval = voxel_len / jnp.abs(rays_d)
+      offset_bigger = (safe_ceil(first_intersection / voxel_len) * voxel_len - first_intersection) / rays_d
+      offset_smaller = (safe_floor(first_intersection / voxel_len) * voxel_len - first_intersection) / rays_d
+      offset = jnp.maximum(offset_bigger, offset_smaller)
   # Compute the samples along each ray
   matrix = None
   powers = None
