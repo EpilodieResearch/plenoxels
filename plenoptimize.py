@@ -116,10 +116,11 @@ flags.add_argument(
     default=None,
     help='SGD step size for sigma. Default chooses automatically based on resolution.'
     )
+# Nother default argument that forces the script to execute just to import a function....
 flags.add_argument(
     '--physical_batch_size',
     type=int,
-    default=4000,
+    default=None, #4000,
     help='Number of rays per batch, to avoid OOM.'
     )
 flags.add_argument(
