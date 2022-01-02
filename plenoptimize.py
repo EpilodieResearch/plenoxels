@@ -262,6 +262,7 @@ def lowpass(gt, resolution):
     H = gt.shape[0]
     W = gt.shape[1]
     im = Image.fromarray((np.squeeze(np.asarray(gt))*255).astype(np.uint8))
+    # Cool-ly enough, the jax library resize should easily handle the higher dimensional transformations too :D
     im = im.resize(size=(resolution*2, resolution*2))
     im = im.resize(size=(H, W))
     return np.asarray(im) / 255.0
