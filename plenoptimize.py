@@ -288,7 +288,9 @@ def multi_lowpass(gt, resolution):
 def get_loss(data_dict, c2w, gt, H, W, focal, resolution, radius, harmonic_degree, jitter, uniform, key, sh_dim, occupancy_penalty, interpolation, nv):
     # Okay dokay here! C2W is probably something we won't directly learn, but instead just pass in in a fixed way (need to figure out appropriate bounds,
     # but for now -- just probably need to pick a singular viewpoint and work from that.
+    # Best guess so far is (H, W, 3)....? maybe? for each of them?
     rays = plenoxel.get_rays(H, W, focal, c2w)
+    print("Rays shape! : ", (rays[0].shape, rays[1].shape))
     # This probably can stay unchanged too! (just as long as c2w is a set of constants, I think/methinks!)
     rgb, disp, acc, weights, voxel_ids = plenoxel.render_rays(data_dict, rays, resolution, key, radius, harmonic_degree, jitter, uniform, interpolation, nv)
     mse = jnp.mean((rgb - lowpass(gt, resolution))**2)
