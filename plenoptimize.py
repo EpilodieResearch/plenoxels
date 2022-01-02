@@ -223,7 +223,7 @@ def get_data(root, stage):
     all_c2w = np.asarray(all_c2w)
     return focal, all_c2w, all_gt
 
-
+"""
 if __name__ == "__main__":
     focal, train_c2w, train_gt = get_data(data_dir, "train")
     test_focal, test_c2w, test_gt = get_data(data_dir, "test")
@@ -231,7 +231,7 @@ if __name__ == "__main__":
     H, W = train_gt[0].shape[:2]
     n_train_imgs = len(train_c2w)
     n_test_imgs = len(test_c2w)
-
+"""
 
 log_dir = FLAGS.log_dir + FLAGS.expname
 os.makedirs(log_dir, exist_ok=True)
@@ -483,5 +483,5 @@ def main():
             print(f'at epoch {i}, test psnr is {validation_psnr}')
         
     
-if __name__ == "__main__":
-    main()
+#if __name__ == "__main__":
+#    main()
